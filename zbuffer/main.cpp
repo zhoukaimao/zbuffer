@@ -4,9 +4,13 @@
 #include<fstream>
 #include<vector>
 #include<math.h>
+#include   <time.h> 
 using namespace std;
+using namespace cv;
 
 #define ZEROF 0.000001f
+
+int base_color[8] = { 0x00000000,0x00ff0000,0x0000ff00,0x000000ff,0x00ffff00,0x00ff00ff,0x0000ffff,0x00ffffff };
 
 struct vec3f;
 struct Poly;
@@ -54,6 +58,12 @@ struct Poly {
 	bool flag;//in or out
 	Poly* next;
 	Poly() { ID = POLYCNT++; }
+	float getZ(float x, float y) {
+		if (abs(para[2]) < ZEROF) {
+			return -INFINITY;
+		}
+		return (para[0] * x + para[1] * y + para[3]) / (-para[2]);
+	}
 };
 struct Edge {
 	int ID;
@@ -65,6 +75,7 @@ struct Edge {
 	Poly* ply;
 	Edge* next;
 	Edge() { ID = EDGECNT++; }
+	bool lt(const Edge* rh) { return x > rh->x || x == rh->x && dx > rh->dx; }//larger than
 };
 
 
@@ -77,12 +88,20 @@ cv::Vec3b int2color(int color) {
 }
 void draw_line(int y, int x1, int x2,int color) {
 	cv::Vec3b c = int2color(color);
-	screen(cv::Rect(x1, y, x2, y)) = c;
+	if (y<0 || y>height - 1 || x1<0 || x1>width - 1 || x2<0 || x2>width - 1) {
+		cout << "out of range!" << endl;
+		exit(1);
+	}
+	//cout << "width:" << x2 - x1 << endl;
+
+	screen(cv::Rect(x1, y,x2-x1,1)) = c;
+	//cout << "y:" << y << " x1:" << x1 << " x2:" << x2 << endl;
+	//line(screen, cv::Point(1, 1), cv::Point(250, 250), c, 1, CV_AA);
 }
 
 void init() {
 	screen = cv::Mat::zeros(height, width, CV_8UC3);
-	screen = int2color(background);
+	screen = int2color(0x000000ff);
 
 	BG = new Poly();
 	X0 = new Edge();
@@ -192,7 +211,7 @@ void load(const char* filepath) {
 void comp_para(Poly* ply,vec3f v1,vec3f v2,vec3f v3) {//compute parameter
 	float x1 = v1.getX(); float y1 = v1.getY(); float z1 = v1.getZ();
 	float x2 = v2.getX(); float y2 = v2.getY(); float z2 = v2.getZ();
-	float x3 = v2.getX(); float y3 = v3.getY(); float z3 = v3.getZ();
+	float x3 = v3.getX(); float y3 = v3.getY(); float z3 = v3.getZ();
 	ply->para[0] = ((y2 - y1)*(z3 - z1) - (z2 - z1)*(y3 - y1));//a
 	ply->para[1] = ((z2 - z1)*(x3 - x1) - (x2- x1)*(z3 - z1));//b
 	ply->para[2] = ((x2 - x1)*(y3 - y1) - (y2 - y1)*(x3 - x1));//c
@@ -224,14 +243,14 @@ void normalize() {
 		exit(1);
 	}
 	for (int i = 0; i < vertices.size(); i++) {
-		vertices[i].comp[0] = (2 * vertices[i].comp[0] - xmax - xmin) / (xmax - xmin);
-		vertices[i].comp[1] = (2 * vertices[i].comp[1] - ymax - ymin) / (ymax - ymin);
+		vertices[i].comp[0] = (2 * vertices[i].comp[0] - xmax - xmin) / (xmax - xmin)/0.9;
+		vertices[i].comp[1] = (2 * vertices[i].comp[1] - ymax - ymin) / (ymax - ymin)/0.9;
 		vertices[i].comp[2] = (2 * vertices[i].comp[2] - zmax - zmin) / (zmax - zmin);
 	}
 }
 //convert x,y from (-1,1) to screen space
 void convert_coord() {
-	normalize();
+	//normalize();
 	for (int i = 0; i < vertices.size(); i++) {
 		vertices[i].comp[0] = (vertices[i].getX() + 1) / 2 * width;
 		vertices[i].comp[1] = (vertices[i].getY() + 1) / 2 * height;
@@ -251,11 +270,11 @@ void build() {
 			float y1 = vertices[idx[j]].getY();
 			float x2 = vertices[idx[(j + 1) % idx.size()]].getX();
 			float y2 = vertices[idx[(j + 1) % idx.size()]].getY();
-			if (y1 - y2 < ZEROF)continue;//horizon line
+			if (abs(y1 - y2) < ZEROF)continue;//horizon line
 
 			Edge* edge = new Edge();
 			edge->dx = (x1 - x2) / (y2 - y1);
-			edge->dy = abs(floor(y1) - floor(y2)) + 1;
+			edge->dy = abs(floor(y1) - floor(y2));
 			edge->x = y1 > y2 ? x1 : x2;
 			edge->ply = ply;
 
@@ -270,11 +289,11 @@ void build() {
 			pymin = pymin < y1 ? pymin : y1;
 			pymin = pymin < y2 ? pymin : y2;
 		}
-
-		ply->color = rand();
+		//srand((unsigned)time(0));
+		ply->color = base_color[rand()%8];
 		ply->flag = false;
 		comp_para(ply, vertices[idx[0]], vertices[idx[1]], vertices[idx[2]]);
-		ply->dy = floor(pymax) - floor(pymin) + 1;
+		ply->dy = floor(pymax) - floor(pymin);
 
 		//insert into PT
 		int ymax = floor(pymax);
@@ -283,61 +302,221 @@ void build() {
 		
 	}
 }
-//update AET,IPL and ET,PT
-void update(int y) {
-	//AET--
+void insert_AET(Edge* edge) {
+	if (AET == NULL) {
+		AET = edge;
+		edge->next = NULL;
+	}
+	else {
+		Edge* e;
+		Edge* pre = NULL;
+		e = AET;
+		while (e != NULL) {
+			if (e->lt(edge))break;
+			pre = e;
+			e = e->next;
+		}
+		edge->next = e;
+		if (pre == NULL) {
+			AET = edge;
+		}
+		else {
+			pre->next = edge;
+		}
+	}
+}
+//sort AET,gurantee edge->x increase
+//insert sort
+void sort_AET() {
+	Edge* edge;
+	Edge* pre;
+	Edge* ne;
+	edge = AET;
+	AET = NULL;
+	while (edge != NULL) {
+		ne = edge->next;
+		insert_AET(edge);
+		edge = ne;
+	}
+}
+//update AET,IPL
+void update() {
+
+	//AET --
+	Edge* edge = AET;
+	Edge* prev = NULL;
+	while (edge != NULL) {
+		edge->dy--;
+		edge->x += edge->dx;
+
+		Edge* ne = edge->next;//next edge backup
+
+		if (edge->dy <= 0) {//delete edge
+			if (prev == NULL) {
+				AET = edge->next;
+			}
+			else {
+				prev->next = edge->next;
+			}
+			delete edge;
+			edge = ne;
+		}
+		else {
+			prev = edge;
+			edge = edge->next;
+		}
+
+	}
+
 	//IPL--
-	//add new polygon and edge
+	Poly* ply = IPL;
+	Poly* prevp = NULL;
+	while (ply != NULL) {
+		ply->dy--;
+		Poly* np = ply->next;//polygon backup
+							 //delete polygon
+		if (ply->dy <= 0) {
+			if (prevp == NULL) {
+				IPL = ply->next;
+			}
+			else {
+				prevp->next = ply->next;
+			}
+			delete ply;
+			ply = np;
+		}
+		else {
+			prevp = ply;
+			ply = ply->next;
+		}
+
+	}
+
+	sort_AET();
+}
+
+void add_new_edge_ply(int y) {
+	Edge* edge;
+	Poly* ply;
+
+	//add new edge
+	edge = ET[y];
+
+	while (edge != NULL) {
+
+		//find the position to insert
+		Edge* ne = edge->next;
+		insert_AET(edge);
+		edge = ne;
+	}
+
+	//add new polygon
+	ply = PT[y];
+	while (ply != NULL) {
+		Poly* np = ply->next;//next poly backup
+		ply->next = IPL;
+		IPL = ply;
+		ply = np;
+	}
 
 	//set ipl flag to false
+	ply = IPL;
+	while (ply != NULL) {
+		ply->flag = false;
+		ply = ply->next;
+	}
 }
 //scan from top to bottom
 void scan(int ymin = 0, int ymax = height-1) {
 	int J = 0;
-	AET = ET[height - 1];
-	ET[height - 1] = NULL;
-	IPL = PT[height - 1];
-	PT[height - 1] = NULL;
-
+	//init_AET_IPL();
+	AET = NULL;
+	IPL = NULL;
 	for (int y = ymax; y > ymin; y--) {
+		add_new_edge_ply(y);
 		Edge* edge = AET;
 		Edge* prev = NULL;
+		vector<Poly*> ipl_inter;//IPL in this interval;
+		bool first = true;//first interval or not
 		while (edge != NULL) {
 			if (prev == NULL) {
-				edge->ply->flag != edge->ply->flag;
+				edge->ply->flag = !edge->ply->flag;
 				prev = edge;
 				edge = edge->next;
 				continue;
 			}
 			//如果prev和edge在同一个polygon上，且与扫描线相较于同一点
-			if (prev->x - edge->x < ZEROF && prev->ply->ID == edge->ply->ID) {
+			if ( edge->x - prev->x < ZEROF && prev->ply->ID == edge->ply->ID) {
 				//如果两条边分别位于扫描线的两侧，则视为同一个点。不做任何操作
 				if (edge->dy == 0 && prev->dy > 0 || edge->dy > 0 && prev->dy == 0) {
 					continue;
 				}
 
 			}
-			//扫描IPL，确定要绘制的颜色
-			Poly* p = IPL;
-			while(p != NULL) {
-				//如果只有一个polygon的flag是true，直接绘制
-				//否则，用最前面的polygon的颜色绘制
-				//贯穿怎么办？
+			//计算该区间上的IPL，并按照左端点的深度排序（降序）
+			if (first) {
+				first = false;
+				Poly* p = IPL;
+				while(p != NULL) {
+					if (p->flag) {
+						//找到第一个z值比p的z值小的位置
+						int i = 0;
+						for (i = 0; i < ipl_inter.size(); i++) {
+							if (ipl_inter[i]->getZ(prev->x, y) < p->getZ(prev->x, y)) {
+								break;
+							}
+						}
+						ipl_inter.insert(ipl_inter.begin() + i, p);
+
+					}
+					p = p -> next;
+				}
 			}
-			//绘制这个区间
+			else {
+				//出多边形
+				if (!prev->ply->flag) {
+					//删除prev->ply
+					int i = 0;
+					for (i = 0; i < ipl_inter.size(); i++) {
+						if (ipl_inter[i]->ID == prev->ply->ID) {
+							break;
+						}
+					}
+					ipl_inter.erase(ipl_inter.begin() + i);
+				}
+				else {
+					//insert prev->ply
+					int i = 0;
+					for (i = 0; i < ipl_inter.size(); i++) {
+						float z1 = ipl_inter[i]->getZ(prev->x, y);
+						float z2 = prev->ply->getZ(prev->x, y);
+						if (ipl_inter[i]->getZ(prev->x, y) < prev->ply->getZ(prev->x, y)) {
+							break;
+						}
+					}
+					ipl_inter.insert(ipl_inter.begin() + i, prev->ply);
+				}
+			}
+			
+			if (ipl_inter.size() <= 1) {
+				draw_line(y, prev->x, edge->x, ipl_inter[0]->color);
+			}
+			else {//贯穿
+				draw_line(y, prev->x, edge->x, ipl_inter[0]->color);
+			}
 
 
-			edge->ply->flag != edge->ply->flag;
+			edge->ply->flag = !edge->ply->flag;
 			prev = edge;
 			edge = edge->next;
 
 		}
-		update(y);
+		update();
 	}
 }
 int main() {
 	init();
-	load("example.poly");
+	load("example01.poly");
 	build();
 	scan();
 

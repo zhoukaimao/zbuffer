@@ -23,5 +23,8 @@
     <None Include="example.poly">
       <Filter>源文件</Filter>
     </None>
+    <None Include="example01.poly">
+      <Filter>源文件</Filter>
+    </None>
   </ItemGroup>
 </Project>

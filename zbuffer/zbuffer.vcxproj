@@ -150,6 +150,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="example.poly" />
+    <None Include="example01.poly" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
