@@ -147,10 +147,18 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="tiny_obj_loader.cc" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="example.poly" />
-    <None Include="example01.poly" />
+    <None Include="go_through.poly" />
+    <None Include="4bin.poly" />
+    <None Include="concave.poly" />
+    <None Include="star.poly" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="ScanLine.h" />
+    <ClInclude Include="tiny_obj_loader.h" />
+    <ClInclude Include="Util.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

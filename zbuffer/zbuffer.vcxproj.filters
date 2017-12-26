@@ -18,13 +18,33 @@
     <ClCompile Include="main.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="tiny_obj_loader.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="example.poly">
+    <None Include="concave.poly">
       <Filter>源文件</Filter>
     </None>
-    <None Include="example01.poly">
+    <None Include="go_through.poly">
       <Filter>源文件</Filter>
     </None>
+    <None Include="4bin.poly">
+      <Filter>源文件</Filter>
+    </None>
+    <None Include="star.poly">
+      <Filter>源文件</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="ScanLine.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Util.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="tiny_obj_loader.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
