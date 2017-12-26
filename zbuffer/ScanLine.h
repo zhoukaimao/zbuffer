@@ -1,4 +1,5 @@
 #pragma once
+#include   <algorithm>  
 #include <fstream>
 #include "Util.h"
 #include "tiny_obj_loader.h"
@@ -264,6 +265,7 @@ void convert_coord() {
 }
 //build PT, ET from vertices and indices
 void build() {
+	int C = 0;
 	cout << "vertices number: " << vertices.size() << "\npolygon number:" << indices.size() << endl;
 	cout << "Building edge table and polygon table..." << endl;
 	convert_coord();
@@ -298,7 +300,9 @@ void build() {
 			pymin = pymin < y2 ? pymin : y2;
 		}
 		//srand((unsigned)time(0));
-		ply->color = base_color[rand() % 8];
+		//ply->color = base_color[rand() % 8];
+		ply->color = base_color[C % 8];
+		C++;
 		ply->flag = false;
 		comp_para(ply, vertices[idx[0]], vertices[idx[1]], vertices[idx[2]]);
 		ply->dy = floor(pymax) - floor(pymin);
@@ -437,6 +441,27 @@ void add_new_edge_ply(int y) {
 		ply = ply->next;
 	}
 }
+float cross_through(int y, float x1, float x2, Poly* p1, Poly* p2) {
+	float z11 = p1->getZ(x1, y);
+	float z12 = p1->getZ(x2, y);
+	float z21 = p2->getZ(x1, y);
+	float z22 = p2->getZ(x2, y);
+	if ((z11 - z21)*(z12 - z22) < 0) {
+		//cout << "发生了贯穿" << endl;
+		float x0 = (z21 - z11)*(x1 - x2) / ((z11 - z12) - (z21 - z22)) + x1;
+		return x0;
+	}
+	else return -1;
+}
+
+bool check(int y, float x, const vector<Poly*>& ipl_inter) {
+	for (int i = 0; i < ipl_inter.size()-1; i++) {
+		if (ipl_inter[i]->getZ(x, y) < ipl_inter[i + 1]->getZ(x, y)) {
+			return false;
+		}
+	}
+	return true;
+}
 //scan from top to bottom
 void scan(int ymin = 0, int ymax = height - 1) {
 	//for (int i = 0; i < height; i++) {
@@ -466,9 +491,6 @@ void scan(int ymin = 0, int ymax = height - 1) {
 		bool first = true;//first interval or not
 		int J = 0;
 		while (edge != NULL) {
-			if (edge->ID == 1717) {
-				cout << endl;
-			}
 			if (prev == NULL) {
 				edge->ply->flag = !edge->ply->flag;
 				prev = edge;
@@ -477,11 +499,12 @@ void scan(int ymin = 0, int ymax = height - 1) {
 			}
 			//cout << "prev edge:" << prev->ID << " prev poly:" << prev->ply->ID << " cur edge:" << edge->ID << " cur poly:" << edge->ply->ID << endl;
 			//如果prev和edge在同一个polygon上，且与扫描线相较于同一点
-			if (edge->x - prev->x < ZEROF && prev->ply->ID == edge->ply->ID) {
+			if (floor(edge->x) == floor(prev->x) && prev->ply->ID == edge->ply->ID) {
 				//如果两条边分别位于扫描线的两侧，则视为同一个点。不做任何操作
 				if (edge->dy == 0 && prev->dy > 0 || edge->dy > 0 && prev->dy == 0) {
 					prev = edge;
 					edge = edge->next;
+					cout << "y:" << y << endl;
 					continue;
 				}
 
@@ -534,13 +557,30 @@ void scan(int ymin = 0, int ymax = height - 1) {
 					ipl_inter.insert(ipl_inter.begin() + i, prev->ply);
 				}
 			}
+			if (edge->ID == 1) {
+				draw_line(y, prev->x, edge->x, edge->ply->color);
+			}
+			else {
+				if (ipl_inter.size() <= 1 || floor(prev->x)==floor(edge->x)) {
+					draw_line(y, prev->x, edge->x, ipl_inter[0]->color);
+				}
+				else {//贯穿
+				
+					float x0 = cross_through(y, prev->x, edge->x, ipl_inter[0], ipl_inter[1]);
+					if (x0 > 0) {
+						draw_line(y, prev->x, x0, ipl_inter[0]->color);
+						draw_line(y, x0, edge->x, ipl_inter[1]->color);
+						swap(ipl_inter[0], ipl_inter[1]);
+					}
+					else {
+						draw_line(y, prev->x, edge->x, ipl_inter[0]->color);
+					}
+					if (check(y, prev->x, ipl_inter)) {
+						//cout << "ipl sort error!" << endl;
+					}
+				}
+			}
 
-			if (ipl_inter.size() <= 1) {
-				draw_line(y, prev->x, edge->x, ipl_inter[0]->color);
-			}
-			else {//贯穿
-				draw_line(y, prev->x, edge->x, ipl_inter[0]->color);
-			}
 
 
 			edge->ply->flag = !edge->ply->flag;

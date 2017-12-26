@@ -5,7 +5,7 @@
 #include <string>
 using namespace std;
 
-#define ZEROF 0.00001f
+#define ZEROF 0.000000001f
 
 int string2int(string s) {
 	stringstream ss(s);
